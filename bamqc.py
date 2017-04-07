@@ -30,7 +30,7 @@ def Target_region(bed_file):
             target_area = np.vstack((target_area, tmp_area))
     return target_area
 
-def	BedBamQC(samfile, target_region, depth_cut = 100):
+def BedBamQC(samfile, target_region, depth_cut = 100):
     starts = list(map(int, target_region[:, 1]))
     ends = list(map(int, target_region[:, 2]))
     target_size = np.sum(np.array(ends) - np.array(starts))
