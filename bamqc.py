@@ -5,6 +5,7 @@ import numpy as np
 from optparse import OptionParser
 from multiprocessing import Pool
 import sys
+import copy
 
 CHECK_VERSION = "0.1.3"
 AUTHOR = "youcai"
@@ -21,6 +22,9 @@ def parseCommand():
     return parser.parse_args()
 
 def Target_region(bed_file):
+    '''
+    treat bed file
+    '''
     with open(bed_file) as f:
         line_1st = f.readline().strip().split('\t')
         target_area = np.array(line_1st)
@@ -30,19 +34,51 @@ def Target_region(bed_file):
             target_area = np.vstack((target_area, tmp_area))
     return target_area
 
+def Chr_core(samfile, small_bed):
+    '''
+    for every chromosome, do this analysis
+    '''
+    chr_coverage = []
+    chr_alignments = 0
+    for line in small_bed:
+        ACGT = samfile.count_coverage(str(line[0]), int(line[1]), int(line[2]))
+        chr_coverage.append(sum(np.array(ACGT)))
+        chr_alignments += samfile.count(str(line[0]), int(line[1]), int(line[2]))
+    return chr_coverage, chr_alignments
+
 def BedBamQC(samfile, target_region, depth_cut = 100):
+    '''
+    get every samll region's capture_alignments,
+    and coverage for every position, then calculate the results
+    '''
     starts = list(map(int, target_region[:, 1]))
     ends = list(map(int, target_region[:, 2]))
     target_size = np.sum(np.array(ends) - np.array(starts))
     all_alignments = samfile.mapped + samfile.unmapped
+    # 1. parameters
+    input_list = []
+    chromosome = set(target_region[:, 0])
+    for chro in chromosome:
+        mask = target_region[:, 0] == chro
+        chr_bed = target_region[mask]
+        sam = copy.copy(samfile) ###
+        tmp_argv = (sam, chr_bed)
+        input_list.append(tmp_argv)
+    # 2. assignments
+    P = Pool(processes = len(chromosome))
+    Process = P.starmap(Chr_core, input_list)
+    # 3. results collection
     coverage_arr = [] 
     capture_alignments = 0
-    for one_region in target_region:
-        ACGT = samfile.count_coverage(str(one_region[0]), int(one_region[1]), int(one_region[2]))
-        coverage_arr.append(sum(np.array(ACGT)))
-        # if one alignment span two or more regions
-        # may wrong?
-        capture_alignments += samfile.count(str(one_region[0]), int(one_region[1]), int(one_region[2]))
+    for res in Process:
+        coverage_arr += res[0] # [] + []
+        capture_alignments += res[1] # int + int
+    ###for one_region in target_region:
+    ###    ACGT = samfile.count_coverage(str(one_region[0]), int(one_region[1]), int(one_region[2]))
+    ###    coverage_arr.append(sum(np.array(ACGT)))
+    ###    # if one alignment in two or more regions
+    ###    # so said
+    ###    capture_alignments += samfile.count(str(one_region[0]), int(one_region[1]), int(one_region[2]))
     capture_rate = float(capture_alignments) / all_alignments * 100 ##
     target_base = np.sum(list(map(np.sum, coverage_arr)))
     depth_in_target = float(target_base) / target_size ##
@@ -53,6 +89,10 @@ def BedBamQC(samfile, target_region, depth_cut = 100):
     return capture_rate, depth_in_target, target_coverage, target_100X
 
 def BamQC(samfile, target_area):
+    '''
+    use bam.bai to calculate mapping_rate, the loop bam file to get mapping_quality,
+    duplication_rate, median insert_size
+    '''
     mapped_alignments = samfile.mapped
     unmapped_alignments = samfile.unmapped
     all_alignments = mapped_alignments + unmapped_alignments
