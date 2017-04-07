@@ -30,22 +30,6 @@ def Target_region(bed_file):
             target_area = np.vstack((target_area, tmp_area))
     return target_area
 
-def Chr_core(*argv):
-    '''
-    help info
-    '''
-    samfile = argv[0]
-    small_bed = argv[1]
-    print("1", samfile)
-    print("2", small_bed)
-    chr_coverage = []
-    chr_alignments = 0
-    for line in small_bed:
-        ACGT = samfile.count_coverage(str(line[0]), int(line[1]), int(line[2]))
-        chr_coverage.append(sum(np.array(ACGT)))
-        chr_alignments += samfile.count(str(line[0]), int(line[1]), int(line[2]))
-    return chr_coverage, chr_alignments
-
 def	BedBamQC(samfile, target_region, depth_cut = 100):
     starts = list(map(int, target_region[:, 1]))
     ends = list(map(int, target_region[:, 2]))
@@ -56,8 +40,8 @@ def	BedBamQC(samfile, target_region, depth_cut = 100):
     for one_region in target_region:
         ACGT = samfile.count_coverage(str(one_region[0]), int(one_region[1]), int(one_region[2]))
         coverage_arr.append(sum(np.array(ACGT)))
-        # if one alignment in two or more regions
-        # so said
+        # if one alignment span two or more regions
+        # may wrong?
         capture_alignments += samfile.count(str(one_region[0]), int(one_region[1]), int(one_region[2]))
     capture_rate = float(capture_alignments) / all_alignments * 100 ##
     target_base = np.sum(list(map(np.sum, coverage_arr)))
